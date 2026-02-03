@@ -236,11 +236,19 @@ up() {
     sysctl -w net.ipv4.conf.${MAIN_IF}.rp_filter=2 >/dev/null
     sysctl -w net.ipv4.conf.${WG_IF}.rp_filter=2 2>/dev/null || true
 
+    # Ensure gateway is reachable as a host route (required for providers
+    # where subnet is routed through gateway, not directly connected)
+    ip route add "$MAIN_GW" dev "$MAIN_IF" 2>/dev/null || true
+
     # Route to WireGuard server via original gateway
     ip route add "$WG_SERVER/32" via "$MAIN_GW" dev "$MAIN_IF" 2>/dev/null || \
-        ip route replace "$WG_SERVER/32" via "$MAIN_GW" dev "$MAIN_IF"
+        ip route replace "$WG_SERVER/32" via "$MAIN_GW" dev "$MAIN_IF" 2>/dev/null || true
 
-    # Setup bypass routing table (default route via main gateway)
+    # Setup bypass routing table
+    # Add gateway as host route first (custom tables don't inherit from main)
+    ip route add "$MAIN_GW" dev "$MAIN_IF" table "$RT_TABLE" 2>/dev/null || true
+    
+    # Then add default route via gateway
     ip route add default via "$MAIN_GW" dev "$MAIN_IF" table "$RT_TABLE" 2>/dev/null || \
         ip route replace default via "$MAIN_GW" dev "$MAIN_IF" table "$RT_TABLE"
 
